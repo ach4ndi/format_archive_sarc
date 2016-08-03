@@ -5,7 +5,7 @@ namespace unSARC
 {
     public class sarc
     {
-        private HSARC Header;
+        private HSARC _Header;
         private HSFAT Fat;
         private SFATN[] FatNode;
         private SFNT FNT;
@@ -19,43 +19,49 @@ namespace unSARC
             ReadHeader(path);
         }
 
+        public HSARC Header
+        {
+            get { return _Header; }
+        }
+
         private void ReadHeader(string path)
         {
             FileStream readStream = new FileStream(path, FileMode.Open);
             BinaryReader br = new BinaryReader(readStream);
 
-            Header = new HSARC();
+            _Header = new HSARC();
 
-            Header.Magic = br.ReadUInt32();
-            Header.Lenght = br.ReadUInt16();
-            Header.BOM = br.ReadUInt16();
-            Header.FileLenght = br.ReadUInt32();
-            Header.DATOffset = br.ReadUInt32();
-            Header.Unknown = br.ReadUInt32();
+            _Header.Magic = br.ReadChars(4);
+            _Header.Lenght = br.ReadUInt16();
+            _Header.BOM = br.ReadUInt16();
+            _Header.FileLenght = br.ReadUInt32();
+            _Header.DATOffset = br.ReadUInt32();
+            _Header.Version = br.ReadUInt16();
+            _Header.Unknown = br.ReadUInt16();
 
             Fat = new HSFAT();
 
-            Fat.Magic = br.ReadUInt32();
+            Fat.Magic = br.ReadChars(4);
             Fat.Lenght = br.ReadUInt16();
-            Fat.NodeCount = br.ReadUInt16();
-            Fat.FileNameHashMultiplier = br.ReadUInt32();
+            Fat.NodeCount = br.ReadUInt16(); // max 0x3fff ~ ‭16383‬
+            Fat.HashKey = br.ReadUInt32();
 
             FatNode = new SFATN[Fat.NodeCount];
 
             for (int i = 0; i < FatNode.Length; i++)
             {
                 FatNode[i].FileNameHash = br.ReadUInt32();
-                FatNode[i].FileNameTableEntry = BitConverter.ToUInt16(br.ReadBytes(2), 0);
+                FatNode[i].FileNameOffsetEntry = BitConverter.ToUInt16(br.ReadBytes(2), 0);
                 br.ReadBytes(1);
-                FatNode[i].Unknown = br.ReadByte();
+                FatNode[i].FileNameFlag = br.ReadByte();
                 FatNode[i].StartFileNode = br.ReadUInt32();
                 FatNode[i].EndFileNode = br.ReadUInt32();
             }
 
             FNT = new SFNT();
-            FNT.Magic = br.ReadUInt32();
+            FNT.Magic = br.ReadChars(4);
             FNT.Lenght = br.ReadUInt16();
-            br.ReadUInt16();
+            FNT.Unknown = br.ReadUInt16();
 
             FNTNode = new string[Fat.NodeCount];
 
@@ -64,6 +70,7 @@ namespace unSARC
                 int asciilenghtcount = 0;
                 bool sopread = false;
 
+                //256 character
                 do
                 {
                     byte tempbyte = br.ReadByte();
@@ -94,11 +101,11 @@ namespace unSARC
                     break;
                 }
 
-                UInt32 hash = GetHash(FNTNodeA[i].FileName, Fat.FileNameHashMultiplier);
+                UInt32 hash = GetHash(FNTNodeA[i].FileName, Fat.HashKey);
 
                 for (int j = 0; j < FatNode.Length; j++)
                 {
-                    if (FatNode[j].FileNameHash == hash)
+                    if (FatNode[j].FileNameHash == hash && FatNode[i].FileNameFlag == 1)
                     {
                         //Console.WriteLine(FatNode[j].FileNameHash);
                         //Console.WriteLine(hash);
@@ -128,23 +135,46 @@ namespace unSARC
             for (int i = 0; i < FatNode.Length; i++)
             {
                 //Console.WriteLine((i+1)+" of "+ FatNode.Length);
-                br.BaseStream.Position = Header.DATOffset + FatNode[(int) FNTNodeA[i].FatNodeNumber].StartFileNode;
+                br.BaseStream.Position = _Header.DATOffset + FatNode[(int) FNTNodeA[i].FatNodeNumber].StartFileNode;
                 uint lenghtfile = FatNode[(int)FNTNodeA[i].FatNodeNumber].EndFileNode - FatNode[(int)FNTNodeA[i].FatNodeNumber].StartFileNode;
 
-                if (FNTNodeA[i].FileName == null)
-                {
-                    break;
-                }
+                string tempath = "";
+                string tempath2 = "";
 
-                string tempath = ExcPath + @"\" + FNTNodeA[i].FileName.Replace("/", "\\");
-                string tempath2 = Path.GetFileName(tempath);
-                //Console.WriteLine(tempath);
-                if (!Directory.Exists(tempath.Replace(tempath2,"")))
+                if (FatNode[i].FileNameFlag == 1)
                 {
-                    Directory.CreateDirectory(tempath.Replace(tempath2, ""));
-                }
+                    if (FNTNodeA[i].FileName == null)
+                    {
+                        break;
+                    }
 
-                File.WriteAllBytes(tempath,br.ReadBytes((int)lenghtfile));
+                    tempath = ExcPath + @"\" + FNTNodeA[i].FileName.Replace("/", "\\");
+                    tempath2 = Path.GetFileName(tempath);
+
+                    //Console.WriteLine(tempath);
+                    if (!Directory.Exists(tempath.Replace(tempath2, "")))
+                    {
+                        Directory.CreateDirectory(tempath.Replace(tempath2, ""));
+                    }
+
+                    File.WriteAllBytes(tempath, br.ReadBytes((int)lenghtfile));
+                }
+                else
+                {
+                    br.BaseStream.Position = _Header.DATOffset + FatNode[i].StartFileNode;
+                    lenghtfile = FatNode[i].EndFileNode - FatNode[i].StartFileNode;
+
+                    tempath = ExcPath + @"\" + i+ ".bin";
+                    tempath2 = Path.GetFileName(tempath);
+
+                    //Console.WriteLine(tempath);
+                    if (!Directory.Exists(tempath.Replace(tempath2, "")))
+                    {
+                        Directory.CreateDirectory(tempath.Replace(tempath2, ""));
+                    }
+
+                    File.WriteAllBytes(tempath, br.ReadBytes((int)lenghtfile));
+                }
             }
 
             br.Close();
@@ -181,36 +211,38 @@ namespace unSARC
     public struct HSARC
     {
         // always 20 byte
-        public UInt32 Magic;
+        public char[] Magic;
         public UInt16 Lenght;
         public UInt16 BOM;          // 0xFFFE
         public UInt32 FileLenght;
         public UInt32 DATOffset; // absolute
-        public UInt32 Unknown; //0x00000100
+        public UInt16 Version;
+        public UInt16 Unknown; //0x00000100
     }
 
     public struct HSFAT
     {
         // always 12 byte
-        public UInt32 Magic;
+        public char[] Magic;
         public UInt16 Lenght;
         public UInt16 NodeCount; 
-        public UInt32 FileNameHashMultiplier;
+        public UInt32 HashKey;
     }
 
     public struct SFATN
     {
         public UInt32 FileNameHash;
-        public UInt32 FileNameTableEntry; // relative offset after FAT Header div by 4
-        public byte Unknown; // always 0x1
+        public UInt32 FileNameOffsetEntry; // relative offset after FAT Header div by 4
+        public byte FileNameFlag; // always 0x1
         public UInt32 StartFileNode;
         public UInt32 EndFileNode; // relative
     }
 
     public struct SFNT
     {
-        public UInt32 Magic;
+        public char[] Magic;
         public UInt16 Lenght;
+        public UInt16 Unknown;
     }
 
     public struct SFNTN
