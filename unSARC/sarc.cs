@@ -36,8 +36,8 @@ namespace unSARC
             _Header.BOM = br.ReadUInt16();
             _Header.FileLenght = br.ReadUInt32();
             _Header.DATOffset = br.ReadUInt32();
-            _Header.Version = br.ReadUInt16();
-            _Header.Unknown = br.ReadUInt16();
+            _Header.Version = br.ReadUInt32();
+            _Header.Unknown = br.ReadUInt32();
 
             Fat = new HSFAT();
 
@@ -216,8 +216,8 @@ namespace unSARC
         public UInt16 BOM;          // 0xFFFE
         public UInt32 FileLenght;
         public UInt32 DATOffset; // absolute
-        public UInt16 Version;
-        public UInt16 Unknown; //0x00000100
+        public UInt32 Version;
+        public UInt32 Unknown; //0x00000100
     }
 
     public struct HSFAT
