@@ -25,7 +25,10 @@ namespace unSARC
 
             if (odiag.ShowDialog() != DialogResult.OK) return;
 
+            textBox1.Text = "";
             progressBar1.Value = 0;
+            bool verboseout = checkBox1.Checked;
+
             Stopwatch stop = new Stopwatch();
 
             Thread nTh = new Thread(
@@ -40,7 +43,17 @@ namespace unSARC
 
                     for (int i = 0; i < odiag.FileNames.Length; i++)
                     {
-                        sarc sn = new sarc(odiag.FileNames[i]);
+                        sarc sn;
+
+                        if (verboseout)
+                        {
+                            sn = new sarc(odiag.FileNames[i], textBox1);
+                        }
+                        else
+                        {
+                            sn = new sarc(odiag.FileNames[i]);
+                        }
+
                         sn.Extract();
 
                         this.BeginInvoke(new Action(() =>
@@ -55,6 +68,12 @@ namespace unSARC
                 }));
 
             nTh.Start();
+        }
+
+        private void txt_chg1(object sender, EventArgs e)
+        {
+            textBox1.SelectionStart = textBox1.Text.Length;
+            textBox1.ScrollToCaret();
         }
     }
 }
